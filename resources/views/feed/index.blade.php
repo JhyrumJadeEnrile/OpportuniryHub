@@ -8,18 +8,21 @@
         'announcement' => 'bg-slate-100 text-slate-700',
         'job'          => 'bg-emerald-50 text-emerald-700',
         'internship'   => 'bg-sky-50 text-sky-700',
-        'scholarship'  => 'bg-rose-50 text-rose-700',
         'event'        => 'bg-violet-50 text-violet-700',
         'training'     => 'bg-indigo-50 text-indigo-700',
         'volunteer'    => 'bg-teal-50 text-teal-700',
         'achievement'  => 'bg-amber-50 text-amber-800',
         'question'     => 'bg-orange-50 text-orange-700',
+        'hiring'       => 'bg-emerald-50 text-emerald-700',
+        'application'  => 'bg-cyan-50 text-cyan-700',
+        'scholarship'  => 'bg-rose-50 text-rose-700',
+        'other'        => 'bg-fuchsia-50 text-fuchsia-700',
     ];
+    $opportunityKeys = array_keys($opportunity);
 @endphp
 
 <div class="mx-auto max-w-2xl">
 
-    {{-- Page header --}}
     <header class="mb-8 flex items-end justify-between gap-4">
         <div>
             <p class="eyebrow">Community</p>
@@ -31,18 +34,17 @@
         </button>
     </header>
 
-    {{-- Posts --}}
     <div class="space-y-6" aria-label="Posts">
         @forelse ($posts as $post)
             @php
                 $myVote  = $post->votes->first()?->value;
                 $isOwner = $post->user_id === auth()->id();
+                $applied = $post->applications->isNotEmpty();
+                $blockReason = (! $isOwner && $post->isOpportunity()) ? $post->applyBlockReason(auth()->user()) : null;
             @endphp
 
-            <article id="post-{{ $post->id }}"
-                     class="card scroll-mt-28 p-6 transition duration-200 hover:shadow-md sm:p-7">
+            <article id="post-{{ $post->id }}" class="card scroll-mt-28 p-6 transition duration-200 hover:shadow-md sm:p-7">
 
-                {{-- Author and category --}}
                 <header class="flex items-start justify-between gap-4">
                     <div class="flex min-w-0 items-center gap-3">
                         <a href="{{ route('members.show', $post->user) }}"
@@ -51,8 +53,7 @@
                             {{ mb_strtoupper(mb_substr($post->user->name, 0, 1)) }}
                         </a>
                         <div class="min-w-0">
-                            <a href="{{ route('members.show', $post->user) }}"
-                               class="block truncate text-sm font-semibold text-slate-900 hover:underline">
+                            <a href="{{ route('members.show', $post->user) }}" class="block truncate text-sm font-semibold text-slate-900 hover:underline">
                                 {{ $post->user->name }}
                             </a>
                             <p class="truncate text-xs text-slate-500">
@@ -68,23 +69,67 @@
                     </span>
                 </header>
 
-                {{-- Content --}}
                 <div class="mt-5">
                     <p class="whitespace-pre-line text-[15px] leading-7 text-slate-700">{{ $post->body }}</p>
                 </div>
 
+                @if ($post->isOpportunity())
+                    <div class="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                        <span class="badge {{ $post->isOpen() ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700' }}">
+                            {{ $post->isOpen() ? 'Open' : 'Closed' }}
+                        </span>
+                        <span class="text-slate-500">
+                            {{ $post->deadline ? 'Deadline '.$post->deadline->format('M j, Y') : 'No deadline' }}
+                        </span>
+                        @if ($post->isScholarship())
+                            <span class="badge bg-rose-50 text-rose-700">Students only</span>
+                        @endif
+                    </div>
+                @endif
+
+                @if ($post->requirement_path)
+                    <a href="{{ route('feed.requirement', $post) }}"
+                       class="mt-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm transition hover:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                        <span class="min-w-0 truncate font-medium text-slate-800">Requirements: {{ $post->requirement_name }}</span>
+                        <span class="shrink-0 font-semibold text-brand-700">Download</span>
+                    </a>
+                @endif
+
                 @if ($post->attachment_path)
                     <a href="{{ $post->attachmentUrl() }}" download="{{ $post->attachment_name }}"
-                       class="mt-5 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm transition hover:border-brand-500 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                       class="mt-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm transition hover:border-brand-500 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                         <span class="min-w-0 truncate font-medium text-slate-800">{{ $post->attachment_name }}</span>
                         <span class="shrink-0 font-semibold text-brand-700">Download</span>
                     </a>
                 @endif
 
-                {{-- Actions --}}
-                <footer class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                {{-- Opportunity actions --}}
+                @if ($post->isOpportunity())
+                    <div class="mt-5 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-4">
+                        @if ($isOwner)
+                            <a href="{{ route('applications.index', $post) }}" class="btn-secondary text-xs">
+                                View applicants ({{ $post->applications_count }})
+                            </a>
+                            <form method="POST" action="{{ route('feed.status', $post) }}">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="status" value="{{ $post->status === 'open' ? 'closed' : 'open' }}">
+                                <button type="submit" class="btn-secondary text-xs">
+                                    {{ $post->status === 'open' ? 'Close applications' : 'Reopen applications' }}
+                                </button>
+                            </form>
+                        @elseif ($applied)
+                            <span class="badge bg-emerald-100 text-emerald-800">You applied</span>
+                        @elseif ($blockReason)
+                            <p class="text-xs text-slate-600">{{ $blockReason }}</p>
+                        @else
+                            <a href="{{ route('applications.create', $post) }}" class="btn-primary text-xs">Apply now</a>
+                        @endif
+                    </div>
+                @endif
 
-                    {{-- Voting --}}
+                {{-- Votes, date and delete --}}
+                <footer class="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
                     <div class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1" role="group" aria-label="Vote on this post">
                         <form method="POST" action="{{ route('feed.vote', $post) }}">
                             @csrf
@@ -123,7 +168,7 @@
 
                     @if ($isOwner)
                         <form method="POST" action="{{ route('feed.destroy', $post) }}" class="ms-auto"
-                              onsubmit="return confirm('Delete this post? This cannot be undone.')">
+                              onsubmit="return confirm('Delete this post? Applications and files will be removed too.')">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn-danger text-xs">Delete</button>
@@ -131,7 +176,7 @@
                     @endif
                 </footer>
 
-                {{-- Comments (collapsed by default) --}}
+                {{-- Comments --}}
                 <details class="group mt-4">
                     <summary class="flex cursor-pointer list-none items-center justify-between rounded-lg px-1 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                         <span>{{ $post->comments_count }} {{ \Illuminate\Support\Str::plural('comment', $post->comments_count) }}</span>
@@ -205,16 +250,28 @@
         <div>
             <label for="category" class="label">Type</label>
             <select id="category" name="category" required class="input">
-                @foreach ($categories as $key => $label)
-                    <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
-                @endforeach
+                <optgroup label="General">
+                    @foreach ($general as $key => $label)
+                        <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
+                    @endforeach
+                </optgroup>
+                @if ($opportunity)
+                    <optgroup label="Opportunities">
+                        @foreach ($opportunity as $key => $label)
+                            <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
+                        @endforeach
+                    </optgroup>
+                @endif
             </select>
+            @unless ($opportunity)
+                <p class="mt-1 text-xs text-slate-500">Hiring, application and scholarship posts are created by alumni and fresh grads.</p>
+            @endunless
         </div>
 
         <div>
             <label for="body" class="label">Message</label>
-            <textarea id="body" name="body" rows="5" maxlength="1000" required class="input"
-                      placeholder="Describe the opportunity, event or achievement.">{{ old('body') }}</textarea>
+            <textarea id="body" name="body" rows="4" maxlength="1000" required class="input"
+                      placeholder="Describe the opportunity, event or update.">{{ old('body') }}</textarea>
             <p class="mt-1 text-xs text-slate-500">Up to 1,000 characters.</p>
         </div>
 
@@ -223,7 +280,21 @@
             <input id="attachment" type="file" name="attachment"
                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png"
                    class="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
-            <p class="mt-1 text-xs text-slate-500">PDF, Word, PowerPoint, Excel, JPG or PNG. Up to 5 MB.</p>
+        </div>
+
+        {{-- Only shown for opportunity types --}}
+        <div data-opportunity-fields class="hidden space-y-5 rounded-xl bg-slate-50 p-4">
+            <div>
+                <label for="deadline" class="label">Application deadline <span class="font-normal text-slate-500">(optional)</span></label>
+                <input id="deadline" type="date" name="deadline" min="{{ now()->toDateString() }}"
+                       value="{{ old('deadline') }}" class="input">
+            </div>
+            <div>
+                <label for="requirement" class="label">Requirements file <span class="font-normal text-slate-500">(optional)</span></label>
+                <input id="requirement" type="file" name="requirement" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                       class="block w-full text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-50">
+                <p class="mt-1 text-xs text-slate-500">Applicants download this to know what to submit.</p>
+            </div>
         </div>
 
         <div class="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
@@ -248,6 +319,17 @@
         dialog.addEventListener('click', (event) => {
             if (event.target === dialog) dialog.close();
         });
+
+        // Show the deadline and requirements fields only for opportunity types.
+        const category = document.getElementById('category');
+        const oppFields = document.querySelector('[data-opportunity-fields]');
+        const opportunityTypes = @json($opportunityKeys);
+
+        const toggleOpportunityFields = () => {
+            oppFields.classList.toggle('hidden', !opportunityTypes.includes(category.value));
+        };
+        category.addEventListener('change', toggleOpportunityFields);
+        toggleOpportunityFields();
 
         @if ($errors->any())
             dialog.showModal();
